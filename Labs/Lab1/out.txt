@@ -1,0 +1,2 @@
+Tri area:2
+Quad area:4
