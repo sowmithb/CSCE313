@@ -29,18 +29,18 @@ int main () {
     if(pid == 0) {
         dup2(fds[1], STDOUT_FILENO);
         close(fds[0]);
-        //close(fds[1]);
+        close(fds[1]);
         execvp(cmd1[0], cmd1);
     }
 
-    pid_t pid2 = fork();
     // Create another child to run second command
     // In child, redirect input to the read end of the pipe
     // Close the write end of the pipe on the child side.
     // Execute the second command.
-    if(pid2 == 0) {
+    if(pid > 0) {
         dup2(fds[0], STDIN_FILENO);
         close(fds[1]);
+        close(fds[0]);
         execvp(cmd2[0], cmd2);
     }
 
@@ -49,6 +49,5 @@ int main () {
     close(fds[1]);
     int status;
     waitpid(pid, &status, 0);
-    waitpid(pid2, &status, 0);
     return 0;
 }
