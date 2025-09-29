@@ -56,6 +56,7 @@ public:
 	cannot accept msglen bytes due to its own buffer capacity. */
 	 
 	std::string name (); 
+	Side side() { return my_side; }  // Getter to use the private field
 };
 
 #endif
