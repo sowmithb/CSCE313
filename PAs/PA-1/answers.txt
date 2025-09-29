@@ -1,0 +1,9 @@
+SEE BENCHMARK_PLOT.PNG IN THE SAME DIRECTORY
+
+Does this trend make sense?
+- Yes the trend of the execution time increasing as file size increases makes sense. The smaller files are floored a little since there is 
+    some time it takes for the client and server to startup. After this though, we can see the larger files take more time as they get bigger.
+
+What is the bottleneck that stops the code from transferring files faster?
+- The main bottleneck that is stopping the transfers from being faster is the buffer size. Each read and write can only be as big as the buffer size.
+    So for bigger files it takes more time since we must perform more read and writes.
