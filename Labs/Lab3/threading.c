@@ -24,8 +24,8 @@ int32_t t_create(fptr foo, int32_t arg1, int32_t arg2)
   }
 
   // find the first free context slot (skip 0 which holds main)
-  int availableIndex = -1;
-  for (int slotIndex = 1; slotIndex < NUM_CTX; slotIndex++) {
+  volatile int availableIndex = -1;
+  for (volatile int slotIndex = 1; slotIndex < NUM_CTX; slotIndex++) {
     if (contexts[slotIndex].state == INVALID) {
       availableIndex = slotIndex;
       break;
