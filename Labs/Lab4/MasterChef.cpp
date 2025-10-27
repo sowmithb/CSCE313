@@ -97,8 +97,6 @@ static void timerHandler(int sig, siginfo_t *si, void *uc) {
 
     // Best-effort cleanup of the one-shot timer to avoid leaks
     timer_delete(comp_item->t_id);
-    // Mark no longer running (defensive; not strictly required)
-    comp_item->running = false;
   }
 
   // Ready to remove that dependency, call the trigger for the appropriate
