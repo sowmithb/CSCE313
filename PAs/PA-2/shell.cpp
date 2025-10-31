@@ -43,7 +43,7 @@ static void show_prompt() {
     char tbuf[64] = {0};
     std::strftime(tbuf, sizeof(tbuf), "%b %d %H:%M:%S", std::localtime(&now));
 
-    std::cout << YELLOW << tbuf << " " << user << ":" << cwd << "$ " << NC;
+    std::cout << YELLOW << tbuf << " " << user << ":" << cwd << "$" << " ";
     std::cout.flush();
 }
 
