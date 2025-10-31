@@ -14,7 +14,6 @@
 #include <algorithm>
 #include "Tokenizer.h"
 
-// all the basic colours for a shell prompt
 #define RED     "\033[1;31m"
 #define GREEN	"\033[1;32m"
 #define YELLOW  "\033[1;33m"
@@ -25,98 +24,95 @@
 using namespace std;
 
 int main () {
-    string prev_dir;
-    bool prev_dir_set = false;
-    vector<pid_t> bg_pids;
+    string prevDir;
+    bool prevDirSet = false;
+    vector<pid_t> bgPids;
 
     for (;;) {
-        int status;
-        pid_t done;
-        while ((done=waitpid(-1,&status,WNOHANG))>0){
-            bg_pids.erase(remove(bg_pids.begin(), bg_pids.end(),done),bg_pids.end());
+        int waitSt;
+        pid_t donePid;
+        while ((donePid=waitpid(-1,&waitSt,WNOHANG))>0){
+            bgPids.erase(remove(bgPids.begin(), bgPids.end(),donePid),bgPids.end());
         }
-        // need date/time, username, and absolute path to current dir
-        const char* user = getenv("USER");
-        if(!user) user="user";
+        const char* usr = getenv("USER");
+        if(!usr) usr="user";
         char cwd[4096];
         getcwd(cwd,sizeof(cwd));
-        time_t now = time(nullptr);
-        char timebuf[64];
-        strftime(timebuf,sizeof(timebuf),"%b %d %H:%M:%S", localtime(&now));
+        time_t nowTs = time(nullptr);
+        char tbuf[64];
+        strftime(tbuf,sizeof(tbuf),"%b %d %H:%M:%S", localtime(&nowTs));
 
 
 
-        cout << YELLOW << timebuf << user << " :"<<cwd<<"$ "<<NC;
+        cout << YELLOW << tbuf <<" "<< usr << " :"<<cwd<<"$ "<<NC;
         cout.flush();
         
-        // get user inputted command
-        string input;
-        if(!getline(cin, input)){
+        string line;
+        if(!getline(cin, line)){
             cout<<endl;
             break;
         }
 
-        if (input == "exit") {  // print exit message and break out of infinite loop
+        if (line == "exit") {
             cout << RED << "Now exiting shell..." << endl << "Goodbye" << NC << endl;
             break;
         }
 
-        // get tokenized commands from user input
-        Tokenizer tknr(input);
-        if (tknr.hasError()||tknr.commands.empty()) {  // continue to next prompt if input had an error
+        Tokenizer tok(line);
+        if (tok.hasError()||tok.commands.empty()) {
             continue;
         }
-        if(tknr.commands.size()==1 && !tknr.commands[0]->args.empty()){
-            Command* cmd = tknr.commands[0];
+        if(tok.commands.size()==1 && !tok.commands[0]->args.empty()){
+            Command* cmd = tok.commands[0];
             if(cmd->args[0]=="cd"){
-                string target;
+                string tgt;
                 if(cmd->args.size()==1){
-                    const char* home = getenv("HOME");
-                    target=home?string(home):"/";
+                    const char* homeDir = getenv("HOME");
+                    tgt=homeDir?string(homeDir):"/";
                 }else{
-                    target =cmd->args[1];
+                    tgt =cmd->args[1];
                 }
-                if(target=="-"){
-                    if(!prev_dir_set) cerr<<"cd: OLDPWD not set"<<endl;
+                if(tgt=="-"){
+                    if(!prevDirSet) cerr<<"cd: OLDPWD not set"<<endl;
                     else{
-                        char curr[4096];
-                        getcwd(curr, sizeof(curr));
-                        if(chdir(prev_dir.c_str())!=0) perror("chdir");
+                        char curDir[4096];
+                        getcwd(curDir, sizeof(curDir));
+                        if(chdir(prevDir.c_str())!=0) perror("chdir");
                         else{
-                            cout<<prev_dir<<endl;
-                            prev_dir = string(curr);
+                            cout<<prevDir<<endl;
+                            prevDir = string(curDir);
                         }
                     }
 
                 }else{
-                    char curr[4096];
-                    getcwd(curr, sizeof(curr));
-                    if(chdir(target.c_str())!=0) perror("chdir");
+                    char curDir[4096];
+                    getcwd(curDir, sizeof(curDir));
+                    if(chdir(tgt.c_str())!=0) perror("chdir");
                     else{
-                        prev_dir = string(curr);
-                        prev_dir_set =true;
+                        prevDir = string(curDir);
+                        prevDirSet =true;
                     }
                 }
                 continue;
             }
         }
-        bool background = false;
-        for(auto c: tknr.commands){
-            if(c->isBackground()){
-                background=true;
+        bool bg = false;
+        for(auto cmd: tok.commands){
+            if(cmd->isBackground()){
+                bg=true;
                 break;
 
             }
         }
-        int stdin_copy = dup(STDIN_FILENO);
+        int stdinDup = dup(STDIN_FILENO);
         vector<pid_t> pids;
-        int prev_read = -1;
+        int prevRd = -1;
 
-        for(size_t i = 0; i<tknr.commands.size(); ++i){
-            Command* cmd = tknr.commands[i];
-            bool last = (i==tknr.commands.size()-1);
-            int pipefd[2] = {-1,-1};
-            if(!last && pipe(pipefd)<0){
+        for(size_t i = 0; i<tok.commands.size(); ++i){
+            Command* cmd = tok.commands[i];
+            bool last = (i==tok.commands.size()-1);
+            int pfd[2] = {-1,-1};
+            if(!last && pipe(pfd)<0){
                 perror("pipe");
                 break;
             }
@@ -126,27 +122,27 @@ int main () {
                 break;
             }
             if(pid==0){
-                if(prev_read!=-1){
-                    dup2(prev_read,STDIN_FILENO);
-                    close(prev_read);
+                if(prevRd!=-1){
+                    dup2(prevRd,STDIN_FILENO);
+                    close(prevRd);
                 }else if(cmd->hasInput()){
-                    int fdin = open(cmd->in_file.c_str(),O_RDONLY);
-                    if(fdin<0){perror("open input"); exit(1);}
-                    dup2(fdin,STDIN_FILENO);
-                    close(fdin);
+                    int inFd = open(cmd->in_file.c_str(),O_RDONLY);
+                    if(inFd<0){perror("open input"); exit(1);}
+                    dup2(inFd,STDIN_FILENO);
+                    close(inFd);
                 }
                 if(!last){
-                    dup2(pipefd[1],STDOUT_FILENO);
+                    dup2(pfd[1],STDOUT_FILENO);
 
                 }else if(cmd->hasOutput()){
-                    int fdout = open(cmd->out_file.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0644);
-                    if(fdout<0){perror("open output"); exit(1);}
-                    dup2(fdout,STDOUT_FILENO);
-                    close(fdout);
+                    int outFd = open(cmd->out_file.c_str(), O_WRONLY|O_CREAT|O_TRUNC, 0644);
+                    if(outFd<0){perror("open output"); exit(1);}
+                    dup2(outFd,STDOUT_FILENO);
+                    close(outFd);
                 }
-                if(pipefd[0]!=-1) close(pipefd[0]);
-                if(pipefd[1]!=-1) close(pipefd[1]);
-                if(stdin_copy!=-1) close(stdin_copy);
+                if(pfd[0]!=-1) close(pfd[0]);
+                if(pfd[1]!=-1) close(pfd[1]);
+                if(stdinDup!=-1) close(stdinDup);
                 
                 vector<char*> argv;
                 for (auto& s: cmd->args)
@@ -158,15 +154,15 @@ int main () {
 
             }else{
                 pids.push_back(pid);
-                if(pipefd[1]!=-1) close(pipefd[1]);
-                if(prev_read!=-1) close(prev_read);
-                prev_read = pipefd[0];
+                if(pfd[1]!=-1) close(pfd[1]);
+                if(prevRd!=-1) close(prevRd);
+                prevRd = pfd[0];
             }
         }
-        dup2(stdin_copy,STDIN_FILENO);
-        close(stdin_copy);
-        if(background){
-            for(auto pid:pids) bg_pids.push_back(pid);
+        dup2(stdinDup,STDIN_FILENO);
+        close(stdinDup);
+        if(bg){
+            for(auto pid:pids) bgPids.push_back(pid);
             if(!pids.empty()) cout<<"["<<pids.front()<<"]"<<endl;
 
         }else{
@@ -174,22 +170,8 @@ int main () {
         }
 
 
-        // // print out every command token-by-token on individual lines
-        // // prints to cerr to avoid influencing autograder
-        // for (auto cmd : tknr.commands) {
-        //     for (auto str : cmd->args) {
-        //         cerr << "|" << str << "| ";
-        //     }
-        //     if (cmd->hasInput()) {
-        //         cerr << "in< " << cmd->in_file << " ";
-        //     }
-        //     if (cmd->hasOutput()) {
-        //         cerr << "out> " << cmd->out_file << " ";
-        //     }
-        //     cerr << endl;
-        // }
-
-        // fork to create child
+        
+        
         
         
     }
