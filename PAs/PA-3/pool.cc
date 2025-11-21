@@ -25,21 +25,67 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::SubmitTask(const std::string &name, Task *task) {
     //TODO: Add task to queue, make sure to lock the queue
+    std::lock_guard<std::mutex> lock(mtx);
+
+    if (done){
+        std::cout << "Cannot added task to queue: " << name << std::endl;
+        return;
+    }
+
+    task->name = name;
+    task->running = false;
+    queue.push_back(task);
+    num_tasks_unserviced++;
+
+    std::cout << "Added task to queue: " << name << std::endl;
 }
 
-void ThreadPool::run_thread() {
-    while (true) {
+void ThreadPool::run_thread()
+{
+    while (true)
+    {
+        Task *task = nullptr;
 
-        //TODO1: if done and no tasks left, break
+        {
+            std::lock_guard<std::mutex> lock(mtx);
 
-        //TODO2: if no tasks left, continue
+            // If Stop() was called *and* there is no more work left,
+            // this worker can terminate.
+            if (done && queue.empty())
+            {
+                std::cout << "Stopping thread " << std::this_thread::get_id() << std::endl;
+                break;
+            }
 
-       
-        //TODO3: get task from queue, remove it from queue, and run it
+            // Grab next task from the queue, if any.
+            if (!queue.empty())
+            {
+                task = queue.front();
+                queue.erase(queue.begin());
+                --num_tasks_unserviced;
+                task->running = true;
+                std::cout << "Started task " << task->name << std::endl;
+            }
+        }
 
-        //TODO4: delete task
+        // Nothing to do right now – yield and loop again.
+        if (!task)
+        {
+            std::this_thread::yield();
+            continue;
+        }
+
+        // Run the task outside the lock.
+        task->Run();
+        task->running = false;
+        std::cout << "Finished task " << task->name << std::endl;
+
+        // The pool owns the Task objects once submitted, so we clean
+        // them up after they finish running.
+        delete task;
     }
 }
+
 
 // Remove Task t from queue if it's there
 void ThreadPool::remove_task(Task *t) {
@@ -57,4 +103,15 @@ void ThreadPool::remove_task(Task *t) {
 
 void ThreadPool::Stop() {
     //TODO: Delete threads, but remember to wait for them to finish first
+    std::cout << "Called Stop()" << std::endl;
+    done = true;
+
+    // Join all worker threads so that destruction of the pool is safe.
+    for (std::thread *t : threads)
+    {
+        if (t && t->joinable())
+        {
+            t->join();
+        }
+    }
 }
